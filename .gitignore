@@ -1,0 +1,25 @@
+# Environments
+venv/
+env/
+.venv/
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# PDFs & index
+*.pdf
+faiss_index/
+
+# OS/IDEs
+.DS_Store
+.vscode/
+.idea/
+
+# Streamlit
+.streamlit/

@@ -1,0 +1,15 @@
+streamlit
+langchain
+langchain-community
+langchain-groq
+langchain-google-genai
+pypdf
+faiss-cpu
+python-dotenv
+fastapi
+uvicorn[standard]
+python-multipart
+redis>=5
+langchain-huggingface
+sentence-transformers
+torch
