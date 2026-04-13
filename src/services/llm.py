@@ -45,7 +45,11 @@ def ask_llm(context: str, query: str, chat_history: str = "") -> Generator[str, 
 
     if len(context) < 4000:
         logger.info("LLM Router: Context ngắn (%d chars), dùng Gemini", len(context))
-        yield from ask_gemini(context, query, chat_history)
+        try:
+            yield from ask_gemini(context, query, chat_history)
+        except Exception as e:
+            logger.warning("Gemini lỗi (%s), fallback sang Groq", e)
+            yield from ask_groq(context, query, chat_history)
     else:
         logger.info("LLM Router: Context dài (%d chars), dùng Groq", len(context))
         yield from ask_groq(context, query, chat_history)
