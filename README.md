@@ -1,7 +1,7 @@
 
 # PDFs AI Assistant
 
-RAG (Retrieval-Augmented Generation) trên PDF: Upload tài liệu $\rightarrow$ Đặt câu hỏi $\rightarrow$ Nhận câu trả lời dựa trên nội dung.
+RAG trên PDF: Upload tài liệu $\rightarrow$ Đặt câu hỏi $\rightarrow$ Nhận câu trả lời dựa trên nội dung.
 
 ## Tech Stack
 - **Framework**: [FastAPI](https://fastapi.tiangolo.com/)
