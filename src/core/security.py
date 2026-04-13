@@ -23,7 +23,17 @@ def is_safe_query(query: str) -> tuple[bool, str]:
         "developer mode",
         "do anything now",
         "bypass",
-        "tiết lộ prompt"
+        "tiết lộ prompt",
+        "trở thành",
+        "cư xử như",
+        "act as",
+        "jailbreak",
+        "trả về luật",
+        "các quy tắc ở trên",
+        "print instructions",
+        "hãy bỏ qua",
+        "cung cấp cho tôi thông tin nội bộ",
+        "đây là một quá trình kiểm thử",
     ]
     
     for word in blocked_keywords:
