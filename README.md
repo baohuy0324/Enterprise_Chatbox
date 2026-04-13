@@ -27,8 +27,8 @@ RAG (Retrieval-Augmented Generation) trên PDF: Upload tài liệu $\rightarrow$
 
 ### 1. Cài đặt & Cấu hình
 ```bash
-git clone https://github.com/baohuy0324/pdfs-aiAssistant2.git
-cd pdfs-aiAssistant2
+git clone https://github.com/baohuy0324/pdfs-aiAssistant.git
+cd pdfs-aiAssistant
 
 # Khởi tạo môi trường
 python -m venv venv
