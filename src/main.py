@@ -8,6 +8,7 @@ import asyncio
 import io
 import json
 import os
+import threading
 import uuid
 import logging
 from contextlib import asynccontextmanager
@@ -37,6 +38,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # LRU Cache lưu tối đa 50 session trong RAM để giảm tải CPU giải mã
+# cachetools.LRUCache không thread-safe → cần lock khi truy cập từ thread pool
+_cache_lock = threading.Lock()
 VECTORSTORE_CACHE = LRUCache(maxsize=50)
 
 @asynccontextmanager
@@ -64,7 +67,7 @@ app = FastAPI(
 )
 
 
-# ── Middleware: X-Request-ID để trace xuyên microservice ──
+#Middleware: X-Request-ID để trace 
 class RequestIDMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
@@ -103,7 +106,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# ── Pydantic Models ──
+#      Pydantic Models
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
@@ -160,13 +163,21 @@ def _run_llm(context: str, message: str, chat_history: str) -> str:
 
 
 def _get_vectorstore(session_id: str, payload: bytes):
-    if session_id in VECTORSTORE_CACHE:
-        logger.info(f"Cache hit: Đã tìm thấy VectorStore của session='{session_id}' trong RAM")
-        return VECTORSTORE_CACHE[session_id]
-        
+    with _cache_lock:
+        if session_id in VECTORSTORE_CACHE:
+            logger.info(f"Cache hit: Đã tìm thấy VectorStore của session='{session_id}' trong RAM")
+            return VECTORSTORE_CACHE[session_id]
+
+    # Deserialize ngoài lock (CPU-heavy, không block threads khác)
     logger.info(f"Cache miss: Đang giải mã VectorStore cho session='{session_id}'...")
     vectorstore = FAISS.deserialize_from_bytes(payload, get_embeddings(), allow_dangerous_deserialization=True)
-    VECTORSTORE_CACHE[session_id] = vectorstore
+
+    # Double-check: nếu thread khác đã deserialize xong trước → dùng kết quả đó
+    with _cache_lock:
+        if session_id not in VECTORSTORE_CACHE:
+            VECTORSTORE_CACHE[session_id] = vectorstore
+        else:
+            vectorstore = VECTORSTORE_CACHE[session_id]
     return vectorstore
 
 
@@ -290,9 +301,10 @@ async def chat_stream(body: ChatRequest):
 @app.delete("/v1/sessions/{session_id}", response_model=DeleteResponse, responses=_error_responses)
 async def delete_session(session_id: str):
     removed = await session_store.delete_session(app.state.redis, session_id)
-    if session_id in VECTORSTORE_CACHE:
-        del VECTORSTORE_CACHE[session_id]
-        logger.info(f"Đã xoá session='{session_id}'.")
+    with _cache_lock:
+        if session_id in VECTORSTORE_CACHE:
+            del VECTORSTORE_CACHE[session_id]
+            logger.info(f"Đã xoá session='{session_id}'.")
 
     if not removed:
         raise HTTPException(status_code=404, detail="Không tìm thấy session.")
