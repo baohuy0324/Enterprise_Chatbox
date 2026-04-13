@@ -1,3 +1,4 @@
+
 # PDFs AI Assistant
 
 RAG (Retrieval-Augmented Generation) trên PDF: Upload tài liệu $\rightarrow$ Đặt câu hỏi $\rightarrow$ Nhận câu trả lời dựa trên nội dung.
@@ -26,8 +27,8 @@ RAG (Retrieval-Augmented Generation) trên PDF: Upload tài liệu $\rightarrow$
 
 ### 1. Cài đặt & Cấu hình
 ```bash
-git clone https://github.com/baohuy0324/pdfs-aiAssistant.git
-cd pdfs-aiAssistant
+git clone https://github.com/baohuy0324/pdfs-aiAssistant2.git
+cd pdfs-aiAssistant2
 
 # Khởi tạo môi trường
 python -m venv venv
@@ -71,20 +72,26 @@ streamlit run app.py
 
 ## Cơ chế RAG & Luồng dữ liệu
 
+### 1. Quy trình Nạp dữ liệu (Ingestion Pipeline)
+- **Trích xuất thông minh**: Sử dụng `PyPDFLoader` để xử lý các file PDF được tải lên, trích xuất văn bản và giữ lại metadata cần thiết.
+- **Phân đoạn văn bản (Chunking)**: Áp dụng `RecursiveCharacterTextSplitter` với kích thước chunk 1500 ký tự và độ chồng lặp (overlap) 300. Kỹ thuật này giúp duy trì ngữ cảnh giữa các đoạn văn bản, đảm bảo câu trả lời không bị mất thông tin tại các điểm cắt.
+- **Số hóa nội dung (Embedding)**: Chuyển đổi văn bản thành không gian vector bằng mô hình local `all-MiniLM-L6-v2`. Việc sử dụng model local giúp bảo mật dữ liệu và giảm chi phí vận hành.
+- **Lưu trữ đa tầng**:
+    - **Vĩnh cửu (Redis)**: Index FAISS được nén và lưu trữ vào Redis kèm theo `session_id` để chia sẻ giữa các instance.
+    - **Truy cập nhanh (LRU Cache)**: Các VectorStore thường dùng được giải mã và lưu tại bộ nhớ RAM (tối đa 50 sessions) giúp giảm tải CPU và tăng tốc độ phản hồi.
 
-### 1. Giai đoạn Nạp dữ liệu (Ingestion Phase)
-- **Tải lên & Trích xuất**: File PDF được tải lên và trích xuất nội dung văn bản bằng `PyPDFLoader`.
-- **Chia nhỏ văn bản (Chunking)**: Văn bản được chia thành các đoạn nhỏ 1500 ký tự (Overlap 300) để tối ưu khả năng xử lý của AI.
-- **Số hóa (Embedding local)**: Chuyển đổi văn bản thành Vector bằng model `all-MiniLM-L6-v2` chạy trực tiếp trên máy.
-- **Lưu trữ (Redis)**: Index FAISS được nén và lưu vào Redis kèm theo `session_id`.
-
-### 2. Giai đoạn Truy vấn & Trả lời (Query Phase)
-- **Bảo mật**: Kiểm tra tính an toàn của câu hỏi (Security Filter).
-- **Tìm kiếm (Retrieval)**: Dựa trên `session_id`, hệ thống tìm ra 6 đoạn văn bản có nội dung liên quan nhất trong file PDF.
-- **Điều phối (LLM Router)**: Tự động chọn model phù hợp:
-    - **Gemini**: Cho các đoạn văn bản ngắn (< 4000 ký tự).
-    - **Groq (Llama 3)**: Cho các đoạn văn bản dài để đảm bảo tốc độ xử lý.
-- **Kết quả**: Trả về câu trả lời chính xác dựa trên kiến thức từ file.
+### 2. Quy trình Truy vấn & Phản hồi (Query Pipeline)
+- **Lớp bảo mật (Security Layer)**: Mọi câu hỏi đều đi qua bộ lọc `is_safe_query` để phát hiện và ngăn chặn các hành vi Prompt Injection.
+- **Định danh & Tracing**: Mỗi yêu cầu được gán một `X-Request-ID` duy nhất giúp theo dõi vết (tracing).
+- **Truy xuất ngữ cảnh (Retrieval)**:
+    - Hệ thống tìm kiếm 6 đoạn văn bản tương quan nhất từ cơ sở dữ liệu FAISS.
+    - **Max Marginal Relevance (MMR)**: Thuật toán được tinh chỉnh để cân bằng giữa độ chính xác và tính đa dạng của thông tin, giảm thiểu sự trùng lặp và tối ưu hóa phạm vi kiến thức cho LLM.
+- **Điều phối thông minh (LLM Routing)**: 
+    - **Gemini 2.5 Flash**: Lựa chọn khi ngữ cảnh ngắn (< 4000 ký tự) để tối ưu độ chính xác và khả năng hiểu tiếng Việt.
+    - **Groq (Llama 3.1)**: Tự động chuyển đổi khi dữ liệu lớn để đảm bảo tốc độ suy luận cực nhanh.
+- **Chế độ phản hồi linh hoạt**:
+    - **Standard Response**: Trả về kết quả hoàn chỉnh ngay khi LLM kết thúc quá trình suy luận.
+    - **SSE Streaming**: Hỗ trợ Server-Sent Events thông qua endpoint `/v1/chat/stream`, trả từng từ (token) real-time.
 
 ## Triển khai Docker 
 
@@ -92,3 +99,4 @@ streamlit run app.py
 docker build -t pdfs-ai-assistant .
 docker run -d --name pdf-api --env-file .env -p 8000:8000 pdfs-ai-assistant
 ```
+
