@@ -5,6 +5,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# Intent được phân loại bởi IntentClassifier
+IntentLiteral = Literal["general_inquiry", "enterprise", "out_of_scope"]
+
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
@@ -12,9 +15,17 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    session_id: str = Field(..., description="ID trả về từ POST /v1/ingest")
+    # session_id là Optional — general_inquiry không cần PDF session
+    session_id: str | None = Field(
+        None,
+        description="ID trả về từ POST /v1/ingest (bắt buộc với câu hỏi enterprise)",
+    )
     message: str
     history: list[ChatMessage] = Field(default_factory=list)
+
+
+class IntentResponse(BaseModel):
+    intent: IntentLiteral
 
 
 class ChatResponse(BaseModel):
@@ -45,3 +56,4 @@ ERROR_RESPONSES = {
     404: {"model": ErrorResponse, "description": "Not Found"},
     500: {"model": ErrorResponse, "description": "Internal Server Error"},
 }
+

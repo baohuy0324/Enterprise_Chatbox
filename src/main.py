@@ -1,5 +1,5 @@
 """
-FastAPI entry point — PDFs AI Assistant.
+FastAPI entry point — Enterprise Chatbox.
 Chạy: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
 Cấu trúc module:
@@ -9,7 +9,7 @@ Cấu trúc module:
   src/schemas/chat.py       — Pydantic models
   src/routers/health.py     — GET  /health
   src/routers/ingest.py     — POST /v1/ingest
-  src/routers/chat.py       — POST /v1/chat, /v1/chat/stream
+  src/routers/chat.py       — POST /v1/chat/stream
   src/routers/sessions.py   — DELETE /v1/sessions/{id}
   src/services/             — llm, rag, session_store, vectorstore_cache
 """
@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 
 # App
 app = FastAPI(
-    title="PDFs AI Assistant API",
-    description="RAG trên PDF.",
+    title="Enterprise Chatbox API",
+    description="Enterprise chatbox.",
     version="1.0.0",
     lifespan=lifespan,
 )
