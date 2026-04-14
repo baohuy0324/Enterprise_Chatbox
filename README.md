@@ -52,7 +52,9 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 # Xem Swagger UI tại: http://127.0.0.1:8000/docs
 ```
 
-**Bước 3: Chạy giao diện kiểm thử (Tùy chọn)**
+**Bước 3: Chạy giao diện kiểm thử Streamlit (Tùy chọn)**
+
+*(Lưu ý: Bạn phải đảm bảo API ở Bước 2 đang chạy, vì Streamlit hiện đóng vai trò là Frontend gọi qua REST API).*
 ```bash
 streamlit run app.py
 ```
@@ -74,7 +76,7 @@ streamlit run app.py
 ## Triển khai Docker 
 
 ```bash
-docker build -t pdfs-ai-assistant .
-docker run -d --name pdf-api --env-file .env -p 8000:8000 pdfs-ai-assistant
+docker build -t Enterprise_Chatbox .
+docker run -d --name Enterprise_Chatbox --env-file .env -p 8000:8000 Enterprise_Chatbox
 ```
 
