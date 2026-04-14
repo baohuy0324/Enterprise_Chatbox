@@ -100,17 +100,17 @@ RESPONSE:"""
 OUT_OF_SCOPE_RESPONSE_VI = (
     "Xin lỗi, câu hỏi của bạn hiện nằm ngoài phạm vi hỗ trợ của tôi.\n\n"
     "Tôi là Trợ lý AI Doanh nghiệp, được thiết kế chuyên biệt để hỗ trợ các chủ đề:\n"
-    "• Nền tảng OTT & collaboration nội bộ (Zalo, Teams, Slack, Rocket.Chat...)\n"
-    "• Tính năng và kỹ thuật chatbox nội bộ: nhắn tin, gọi điện, chia sẻ file, quản lý thành viên\n"
+    "• Nền tảng OTT & collaboration nội bộ\n"
+    "• Tính năng và kỹ thuật chatbox nội bộ: nhắn tin, gọi điện, chia sẻ file\n"
     "• Truy vấn, phân tích tài liệu và các quy trình thông qua file PDF được tải lên\n\n"
-    "Vui lòng đặt câu hỏi liên quan đến các lĩnh vực chuyên môn trên để tôi có thể phục vụ bạn tốt nhất!"
+    "Vui lòng đặt câu hỏi liên quan đến các lĩnh vực trên để tôi có thể phục vụ bạn tốt nhất!"
 )
 
 OUT_OF_SCOPE_RESPONSE_EN = (
     "I apologize, but your question is currently outside my scope of support.\n\n"
     "As an Enterprise AI Assistant, I am specialized in assisting with:\n"
-    "• OTT & enterprise collaboration platforms (Zalo, Teams, Slack, Rocket.Chat...)\n"
-    "• Internal chatbox mechanics: messaging, calls, file sharing, role management\n"
+    "• OTT & enterprise collaboration platforms\n"
+    "• Internal chatbox mechanics: messaging, calls, file sharing\n"
     "• Document analysis and corporate inquiries via uploaded PDFs\n\n"
     "Please feel free to ask a question related to these enterprise domains!"
 )
