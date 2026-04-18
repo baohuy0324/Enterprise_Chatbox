@@ -1,3 +1,5 @@
+--extra-index-url https://download.pytorch.org/whl/cu121
+
 streamlit
 langchain
 langchain-community
@@ -15,3 +17,6 @@ sentence-transformers
 torch
 torchvision
 cachetools
+docx2txt
+pandas
+openpyxl

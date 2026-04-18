@@ -25,28 +25,29 @@ router = APIRouter(prefix="/v1", tags=["Ingest"])
 )
 async def ingest(request: Request, files: list[UploadFile] = File(...)):
     """
-    Nhận 1 hoặc nhiều file PDF, xây dựng FAISS vectorstore và lưu vào Redis.
+    Nhận 1 hoặc nhiều file, xây dựng FAISS vectorstore và lưu vào Redis.
     Trả về session_id để dùng cho các request /v1/chat tiếp theo.
     """
     if not files:
-        raise HTTPException(status_code=400, detail="Cần ít nhất một file PDF.")
+        raise HTTPException(status_code=400, detail="Cần ít nhất một file.")
 
-    pdf_wrappers: list[io.BytesIO] = []
+    file_wrappers: list[tuple[str, io.BytesIO]] = []
     for f in files:
-        if not f.filename or not f.filename.lower().endswith(".pdf"):
-            raise HTTPException(status_code=400, detail=f"Chỉ chấp nhận PDF: {f.filename!r}")
+        valid_exts = (".pdf", ".docx", ".xlsx")
+        if not f.filename or not any(f.filename.lower().endswith(ext) for ext in valid_exts):
+            raise HTTPException(status_code=400, detail=f"Chỉ chấp nhận PDF, DOCX, XLSX: {f.filename!r}")
         data = await f.read()
         if not data:
             raise HTTPException(status_code=400, detail=f"File rỗng: {f.filename}")
-        pdf_wrappers.append(io.BytesIO(data))
+        file_wrappers.append((f.filename, io.BytesIO(data)))
 
     try:
-        vectorstore = await asyncio.to_thread(process_pdfs_to_vectorstore, pdf_wrappers)
+        vectorstore = await asyncio.to_thread(process_pdfs_to_vectorstore, file_wrappers)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lỗi xử lý PDF: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Lỗi xử lý file: {e}") from e
 
     if vectorstore is None:
-        raise HTTPException(status_code=400, detail="Không trích xuất được văn bản từ PDF.")
+        raise HTTPException(status_code=400, detail="Không trích xuất được văn bản từ file.")
 
     sid = str(uuid.uuid4())
     try:

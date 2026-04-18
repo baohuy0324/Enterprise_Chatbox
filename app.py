@@ -72,6 +72,7 @@ for key, default in [
     ("processed_files_hash", None),
     ("processed_file_names", []),
     ("last_intent", ""), 
+    ("session_start_idx", 0),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -110,7 +111,8 @@ def _auto_process(uploaded_files) -> bool:
             return True
         else:
             try:
-                error_detail = response.json().get("detail", response.text)
+                err_json = response.json()
+                error_detail = err_json.get("message", err_json.get("detail", response.text))
                 st.error(f"API Error ({response.status_code}): {error_detail}")
             except Exception:
                 st.error(f"API Error ({response.status_code}): {response.text}")
@@ -146,11 +148,28 @@ st.markdown("""
 with st.sidebar:
     st.markdown("### 📎 Tài liệu của bạn")
     pdf_docs = st.file_uploader(
-        label="Tải lên file PDF",
+        label="Tải lên file tài liệu (PDF, Word, Excel)",
         accept_multiple_files=True,
-        type="pdf",
+        type=["pdf", "docx", "xlsx"],
     )
     
+    # Xử lý tự động ngay khi có thay đổi file
+    if pdf_docs:
+        if _has_new_files(pdf_docs):
+            with st.spinner("Đang xử lý tài liệu..."):
+                success = _auto_process(pdf_docs)
+                if success:
+                    st.session_state.session_start_idx = len(st.session_state.messages)
+                else:
+                    st.error("Không thể gửi tài liệu lên API.")
+    else:
+        # Nếu không còn file => xoá api_session_id
+        if st.session_state.api_session_id is not None:
+            st.session_state.api_session_id = None
+            st.session_state.processed_files_hash = None
+            st.session_state.processed_file_names = []
+            st.session_state.session_start_idx = len(st.session_state.messages)
+
     # Hiển thị tên file đã upload qua API
     if st.session_state.processed_file_names:
         st.divider()
@@ -176,27 +195,12 @@ if user_query:
         st.markdown(user_query)
 
     with st.chat_message("assistant"):
-        #  Process PDF nếu có file mới upload 
-        if pdf_docs:
-            if _has_new_files(pdf_docs):
-                with st.spinner():
-                    success = _auto_process(pdf_docs)
-                    if not success:
-                        msg = " Không thể gửi tài liệu lên API. Vui lòng thử lại."
-                        st.markdown(msg)
-                        st.session_state.messages.append({"role": "assistant", "content": msg, "intent": "enterprise"})
-                        st.stop()
-        else:
-            # Nếu không còn file → xoá api_session_id
-            if st.session_state.api_session_id is not None:
-                st.session_state.api_session_id = None
-                st.session_state.processed_files_hash = None
-                st.session_state.processed_file_names = []
-
         with st.spinner():
             try:
                 # Prepare payload for API
-                history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[-6:-1]]
+                session_messages = st.session_state.messages[st.session_state.session_start_idx : -1]
+                history = [{"role": m["role"], "content": m["content"]} for m in session_messages[-5:]]
+                
                 payload = {
                     "session_id": st.session_state.api_session_id,
                     "message": user_query,
@@ -209,7 +213,9 @@ if user_query:
                     with requests.post(f"{API_URL}/v1/chat/stream", json=payload, stream=True) as response:
                         if response.status_code != 200:
                             try:
-                                yield f"Lỗi API: {response.status_code} - {response.json().get('detail', response.text)}"
+                                err_json = response.json()
+                                msg = err_json.get("message", err_json.get("detail", response.text))
+                                yield f"Lỗi API: {response.status_code} - {msg}"
                             except:
                                 yield f"Lỗi API: {response.status_code} - {response.text}"
                             return

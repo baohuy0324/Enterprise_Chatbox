@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from functools import lru_cache
 import logging
 
@@ -49,14 +49,15 @@ def ask_groq(context: str, query: str, chat_history: str = "") -> Generator[str,
 
 
 
-# General Inquiry Handler: câu hỏi phiếm, chào hỏi, hỏi ngày giờ
+# General Inquiry Handler: câu hỏi phiếm
 def ask_general_inquiry(query: str, chat_history: str = "") -> Generator[str, None, None]:
     """
     Xử lý câu hỏi General Inquiry
     Dùng Groq + GENERAL_INQUIRY_PROMPT cùng datetime thực.
     """
-    # Inject ngày giờ thực để bot trả lời đúng nếu user hỏi "hôm nay là thứ mấy"
-    now = datetime.now()
+    # Inject ngày giờ thực để bot trả lời đúng về giờ Vn (UTC+7)
+    vn_tz = timezone(timedelta(hours=7))
+    now = datetime.now(vn_tz)
     weekdays_vi = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"]
     current_datetime = (
         f"{weekdays_vi[now.weekday()]}, ngày {now.day:02d}/{now.month:02d}/{now.year} "
@@ -99,8 +100,8 @@ def ask_out_of_scope(query: str) -> Generator[str, None, None]:
 def ask_enterprise_llm(context: str, query: str, chat_history: str = "") -> Generator[str, None, None]:
     """
     Router phân xử logic LLM dựa trên độ dài của ngữ cảnh.
-    Context ngắn (< 10000 ký tự) => Gemini (chính xác hơn tiếng Việt).
-    Context dài (>= 10000 ký tự) => Groq (tốc độ cao hơn).
+    Context ngắn (< 10000 ký tự) => Gemini.
+    Context dài (>= 10000 ký tự) => Groq.
     """
     if not context or not context.strip():
         yield "Tôi không tìm thấy thông tin trong tài liệu."
@@ -122,7 +123,29 @@ def ask_enterprise_llm(context: str, query: str, chat_history: str = "") -> Gene
                 yield from ask_groq(context, query, chat_history)
     else:
         logger.info("LLM Router: Context dài (%d chars), dùng Groq", len(context))
-        yield from ask_groq(context, query, chat_history)
+        has_yielded = False
+        try:
+            logger.info("LLM Router: Đang bắt đầu gọi Groq stream...")
+            for chunk in ask_groq(context, query, chat_history):
+                if not has_yielded:
+                    logger.info("LLM Router: Đã nhận được chunk đầu tiên từ Groq!")
+                has_yielded = True
+                yield chunk
+            logger.info("LLM Router: Hoàn tất gọi Groq stream.")
+        except Exception as e:
+            if has_yielded:
+                logger.warning("Groq bị ngắt kết nối giữa chừng (%s).", e)
+                yield "\n\n*(Đã xảy ra lỗi kết nối mạng với mô hình, xin vui lòng gửi lại câu hỏi)*"
+            else:
+                logger.warning("Groq lỗi (%s), fallback sang Gemini", e)
+                logger.info("LLM Router: Đang bắt đầu gọi Gemini stream (fallback)...")
+                try:
+                    for chunk in ask_gemini(context, query, chat_history):
+                        yield chunk
+                    logger.info("LLM Router: Hoàn tất gọi Gemini stream (fallback).")
+                except Exception as eval_gemini_error:
+                    logger.error("LLM Router: Cả Groq và Gemini đều báo lỗi! (%s)", eval_gemini_error)
+                    yield "\n\n*(Lỗi: Hệ thống đang bị quá tải giới hạn dữ liệu hoặc lỗi kết nối. Vui lòng hỏi lại với câu nắn nót hơn hoặc xóa bớt file nhé!)*"
 
 
 # Backward compatibility alias 

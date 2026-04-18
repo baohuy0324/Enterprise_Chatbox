@@ -71,11 +71,3 @@ streamlit run app.py
 
 ---
 
-
-## Triển khai Docker 
-
-```bash
-docker build -t enterprise-chatbox .
-docker run -d --name enterprise-chatbox --env-file .env -p 8000:8000 enterprise-chatbox
-```
-
