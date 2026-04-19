@@ -12,6 +12,10 @@ IntentLiteral = Literal["general_inquiry", "enterprise", "out_of_scope"]
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
+    intent: str | None = None
+
+class HistoryPayload(BaseModel):
+    history: list[ChatMessage]
 
 
 class ChatRequest(BaseModel):

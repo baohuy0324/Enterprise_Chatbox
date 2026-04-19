@@ -39,18 +39,18 @@ def _parse_intent(raw: str) -> IntentLiteral | None:
         return None
 
 
-def classify_intent(query: str) -> IntentLiteral:
+def classify_intent(query: str, chat_history: str = "") -> IntentLiteral:
     """
     Phân loại câu hỏi của user bằng LLM.
 
     Trả về một trong: "general_inquiry" | "enterprise" | "out_of_scope".
-    Fallback chain: Groq → Gemini → "enterprise".
+    Fallback chain: Groq => Gemini => "enterprise".
     """
     from src.services.llm import _get_gemini, _get_groq  # noqa: PLC0415
 
-    prompt = INTENT_CLASSIFIER_PROMPT.format(question=query)
+    prompt = INTENT_CLASSIFIER_PROMPT.format(question=query, chat_history=chat_history)
 
-    # 1. Groq (Ưu tiên vì tốc độ cao và để tiết kiệm quota Gemini)
+    # 1. Groq 
     try:
         response = _get_groq().invoke(prompt)
         intent = _parse_intent(response.content)

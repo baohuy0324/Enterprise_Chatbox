@@ -47,7 +47,7 @@ async def chat_stream(body: ChatRequest, request: Request):
     chat_history = history_to_string(body.history)
 
     # 2. Intent Classification (CPU-light LLM call, chạy trong thread) 
-    intent = await asyncio.to_thread(classify_intent, body.message)
+    intent = await asyncio.to_thread(classify_intent, body.message, chat_history)
     logger.info("chat_stream: intent=%s | msg='%s'", intent, body.message[:60])
 
     # 3. Branch theo intent 

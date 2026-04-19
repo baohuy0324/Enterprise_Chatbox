@@ -26,3 +26,18 @@ async def delete_session(session_id: str, request: Request):
     if not removed:
         raise HTTPException(status_code=404, detail="Không tìm thấy session.")
     return DeleteResponse(ok=True, message="Đã xoá session thành công.")
+
+@router.post("/sessions/{session_id}/history")
+async def update_history(session_id: str, payload: dict, request: Request):
+    import json
+    # payload: {"history": [...]}
+    await session_store.save_history(request.app.state.redis, session_id, json.dumps(payload.get("history", [])), 86400)
+    return {"ok": True}
+
+@router.get("/sessions/{session_id}/history")
+async def get_history(session_id: str, request: Request):
+    import json
+    raw = await session_store.load_history(request.app.state.redis, session_id)
+    if not raw:
+        return {"history": []}
+    return {"history": json.loads(raw)}

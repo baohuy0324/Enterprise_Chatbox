@@ -2,7 +2,9 @@ import os
 import tempfile
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
 from langchain_core.documents import Document
+from langchain_core.messages import HumanMessage
 import pandas as pd
+import base64
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -23,6 +25,20 @@ def process_pdfs_to_vectorstore(pdf_files):
     #Chunking văn bản và tạo Vector database sử dụng FAISS.
     documents = []
     
+    # Helper extract OCR cho hình ảnh dùng Gemini Vision
+    def _extract_text_from_image(path) -> str:
+        from src.services.llm import _get_gemini
+        gemini = _get_gemini()
+        with open(path, "rb") as bf:
+            b64_image = base64.b64encode(bf.read()).decode("utf-8")
+        msg = HumanMessage(
+            content=[
+                {"type": "text", "text": "Hãy trích xuất văn bản (OCR) trong ảnh này chính xác nhất. Trả về nội dung văn bản gốc, không tự chế hay thêm bình luận:"},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_image}"}}
+            ]
+        )
+        return gemini.invoke([msg]).content
+
     for filename, file_data in pdf_files:
         ext = filename.lower().split('.')[-1]
         
@@ -40,9 +56,13 @@ def process_pdfs_to_vectorstore(pdf_files):
                 loader = Docx2txtLoader(temp_path)
                 docs = loader.load()
             elif ext == "xlsx":
-                # Đọc ma trận Excel và ép nó thành dạng bảng text chay giả lập
+                # Chuyển đổi Excel thành định dạng CSV để đảm bảo Splitter cắt đúng theo từng hàng số liệu
                 df = pd.read_excel(temp_path)
-                text_content = df.to_string(index=False)
+                text_content = df.to_csv(index=False)
+                docs = [Document(page_content=text_content, metadata={"source": temp_path, "page": 0})]
+            elif ext in ["png", "jpg", "jpeg"]:
+                # Đọc OCR từ hình ảnh trước khi lưu làm context
+                text_content = _extract_text_from_image(temp_path)
                 docs = [Document(page_content=text_content, metadata={"source": temp_path, "page": 0})]
             else:
                 docs = []

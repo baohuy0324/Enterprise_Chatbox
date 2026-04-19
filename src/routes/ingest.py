@@ -1,6 +1,6 @@
 """
 Router: Ingest PDF
-POST /v1/ingest — nhận PDF, tạo FAISS vectorstore, lưu Redis, trả session_id.
+POST /v1/ingest — nhận file, tạo FAISS vectorstore, lưu Redis, trả session_id.
 """
 from __future__ import annotations
 
@@ -30,12 +30,14 @@ async def ingest(request: Request, files: list[UploadFile] = File(...)):
     """
     if not files:
         raise HTTPException(status_code=400, detail="Cần ít nhất một file.")
+    if len(files) > 2:
+        raise HTTPException(status_code=400, detail="Chỉ được phép tải lên tối đa 2 file trong một lần.")
 
     file_wrappers: list[tuple[str, io.BytesIO]] = []
     for f in files:
-        valid_exts = (".pdf", ".docx", ".xlsx")
+        valid_exts = (".pdf", ".docx", ".xlsx", ".png", ".jpg", ".jpeg")
         if not f.filename or not any(f.filename.lower().endswith(ext) for ext in valid_exts):
-            raise HTTPException(status_code=400, detail=f"Chỉ chấp nhận PDF, DOCX, XLSX: {f.filename!r}")
+            raise HTTPException(status_code=400, detail=f"Chỉ chấp nhận PDF, DOCX, XLSX, PNG, JPG: {f.filename!r}")
         data = await f.read()
         if not data:
             raise HTTPException(status_code=400, detail=f"File rỗng: {f.filename}")

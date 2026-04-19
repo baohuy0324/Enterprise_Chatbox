@@ -9,7 +9,7 @@ Chatbox doanh nghiệp
 - **Vector Database**: [FAISS](https://github.com/facebookresearch/faiss) (Lưu trữ và tìm kiếm vector local)
 - **Embeddings**: `all-MiniLM-L6-v2` (Model local HuggingFace)
 - **Database/Cache**: [Redis](https://redis.io/) (Quản lý phiên làm việc và lưu trữ Vector Store)
-- **LLMs**: Gemini 1.5 Flash (Google) & Llama 3 (Groq)
+- **LLMs**: Gemini 2.5 Flash (Google) & Llama 3 (Groq)
 - **Interface**: [Streamlit](https://streamlit.io/) (Demo UI)
 
 ---

@@ -4,6 +4,7 @@ import json
 import requests
 import streamlit as st
 import time
+import mimetypes
 
 # Page Config 
 st.set_page_config(
@@ -77,6 +78,17 @@ for key, default in [
     if key not in st.session_state:
         st.session_state[key] = default
 
+# Tải lại lịch sử chat nếu URL có params session_id
+if "session_id" in st.query_params and st.session_state.api_session_id is None:
+    sid = st.query_params["session_id"]
+    try:
+        r = requests.get(f"{API_URL}/v1/sessions/{sid}/history")
+        if r.status_code == 200:
+            st.session_state.api_session_id = sid
+            st.session_state.messages = r.json().get("history", [])
+            st.session_state.session_start_idx = len(st.session_state.messages)
+    except:
+        pass
 
 # Helpers 
 def _compute_files_hash(files) -> str | None:
@@ -100,12 +112,14 @@ def _auto_process(uploaded_files) -> bool:
         files_data = []
         for f in uploaded_files:
             f.seek(0)
-            files_data.append(("files", (f.name, f.read(), "application/pdf")))
+            mime_type = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
+            files_data.append(("files", (f.name, f.read(), mime_type)))
             
         response = requests.post(f"{API_URL}/v1/ingest", files=files_data)
         if response.status_code == 200:
             data = response.json()
             st.session_state.api_session_id = data.get("session_id")
+            st.query_params["session_id"] = data.get("session_id")
             st.session_state.processed_files_hash = _compute_files_hash(uploaded_files)
             st.session_state.processed_file_names = [f.name for f in uploaded_files]
             return True
@@ -146,16 +160,18 @@ st.markdown("""
 
 #  PDF Upload in Sidebar
 with st.sidebar:
-    st.markdown("### 📎 Tài liệu của bạn")
+    st.markdown("### Tài liệu của bạn")
     pdf_docs = st.file_uploader(
-        label="Tải lên file tài liệu (PDF, Word, Excel)",
+        label="Tải lên file tài liệu hoặc hình ảnh (PDF, Word, Excel, PNG, JPG)",
         accept_multiple_files=True,
-        type=["pdf", "docx", "xlsx"],
+        type=["pdf", "docx", "xlsx", "png", "jpg", "jpeg"],
     )
     
     # Xử lý tự động ngay khi có thay đổi file
     if pdf_docs:
-        if _has_new_files(pdf_docs):
+        if len(pdf_docs) > 2:
+            st.error("Bạn chỉ có thể tải lên tối đa 2 file trong một lần.")
+        elif _has_new_files(pdf_docs):
             with st.spinner("Đang xử lý tài liệu..."):
                 success = _auto_process(pdf_docs)
                 if success:
@@ -169,6 +185,8 @@ with st.sidebar:
             st.session_state.processed_files_hash = None
             st.session_state.processed_file_names = []
             st.session_state.session_start_idx = len(st.session_state.messages)
+            if "session_id" in st.query_params:
+                del st.query_params["session_id"]
 
     # Hiển thị tên file đã upload qua API
     if st.session_state.processed_file_names:
@@ -220,6 +238,7 @@ if user_query:
                                 yield f"Lỗi API: {response.status_code} - {response.text}"
                             return
                         
+                        buffer = ""
                         for line in response.iter_lines():
                             if line:
                                 decoded_line = line.decode('utf-8')
@@ -227,8 +246,10 @@ if user_query:
                                     data_str = decoded_line[6:]
                                     if data_str == "[DONE]":
                                         break
+                                    buffer += data_str
                                     try:
-                                        data = json.loads(data_str)
+                                        data = json.loads(buffer)
+                                        buffer = "" # reset buffer khi decode thành công
                                         # Cập nhật intent để hiển thị badge sau
                                         if "intent" in data:
                                             st.session_state.last_intent = data["intent"]
@@ -249,6 +270,13 @@ if user_query:
                     "content": full_response,
                     "intent": intent,
                 })
+                
+                # Cập nhật lịch sử về Redis Backend sau khi trao đổi xong
+                if st.session_state.api_session_id:
+                    try:
+                        requests.post(f"{API_URL}/v1/sessions/{st.session_state.api_session_id}/history", json={"history": st.session_state.messages})
+                    except:
+                        pass
                 
             except requests.exceptions.ConnectionError:
                 st.error(f"Không thể kết nối đến API tại {API_URL}. Vui lòng khởi động API bằng cổng 8000:\\n`uvicorn src.main:app --host 0.0.0.0 --port 8000`")

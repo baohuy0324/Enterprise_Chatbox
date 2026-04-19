@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 @lru_cache(maxsize=1)
 def _get_gemini() -> ChatGoogleGenerativeAI:
     return ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash-latest",
+        model="gemini-2.5-flash",
         google_api_key=GEMINI_API_KEY,
         temperature=0.1,
     )
@@ -99,53 +99,31 @@ def ask_out_of_scope(query: str) -> Generator[str, None, None]:
 # Enterprise LLM Router ưu tiên Gemini, fallback Groq
 def ask_enterprise_llm(context: str, query: str, chat_history: str = "") -> Generator[str, None, None]:
     """
-    Router phân xử logic LLM dựa trên độ dài của ngữ cảnh.
-    Context ngắn (< 10000 ký tự) => Gemini.
-    Context dài (>= 10000 ký tự) => Groq.
+    Router phân xử logic LLM.
+    Mặc định sử dụng Gemini cho Enterprise RAG.
+    Chỉ dùng Groq làm Fallback.
     """
     if not context or not context.strip():
         yield "Tôi không tìm thấy thông tin trong tài liệu."
         return
 
-    if len(context) < 10000:
-        logger.info("LLM Router: Context ngắn (%d chars), dùng Gemini", len(context))
-        has_yielded = False
-        try:
-            for chunk in ask_gemini(context, query, chat_history):
-                has_yielded = True
-                yield chunk
-        except Exception as e:
-            if has_yielded:
-                logger.warning("Gemini bị ngắt kết nối giữa chừng (%s). Không thể fallback.", e)
-                yield "\n\n*(Đã xảy ra lỗi kết nối mạng với mô hình, xin vui lòng gửi lại câu hỏi)*"
-            else:
-                logger.warning("Gemini lỗi (%s), fallback sang Groq", e)
+    logger.info("LLM Router: Dùng Gemini để xử lý RAG")
+    has_yielded = False
+    try:
+        for chunk in ask_gemini(context, query, chat_history):
+            has_yielded = True
+            yield chunk
+    except Exception as e:
+        if has_yielded:
+            logger.warning("Gemini bị ngắt kết nối giữa chừng (%s). Không thể fallback.", e)
+            yield "\n\n*(Đã xảy ra lỗi kết nối mạng với mô hình, xin vui lòng gửi lại câu hỏi)*"
+        else:
+            logger.warning("Gemini lỗi (%s), fallback sang Groq", e)
+            try:
                 yield from ask_groq(context, query, chat_history)
-    else:
-        logger.info("LLM Router: Context dài (%d chars), dùng Groq", len(context))
-        has_yielded = False
-        try:
-            logger.info("LLM Router: Đang bắt đầu gọi Groq stream...")
-            for chunk in ask_groq(context, query, chat_history):
-                if not has_yielded:
-                    logger.info("LLM Router: Đã nhận được chunk đầu tiên từ Groq!")
-                has_yielded = True
-                yield chunk
-            logger.info("LLM Router: Hoàn tất gọi Groq stream.")
-        except Exception as e:
-            if has_yielded:
-                logger.warning("Groq bị ngắt kết nối giữa chừng (%s).", e)
-                yield "\n\n*(Đã xảy ra lỗi kết nối mạng với mô hình, xin vui lòng gửi lại câu hỏi)*"
-            else:
-                logger.warning("Groq lỗi (%s), fallback sang Gemini", e)
-                logger.info("LLM Router: Đang bắt đầu gọi Gemini stream (fallback)...")
-                try:
-                    for chunk in ask_gemini(context, query, chat_history):
-                        yield chunk
-                    logger.info("LLM Router: Hoàn tất gọi Gemini stream (fallback).")
-                except Exception as eval_gemini_error:
-                    logger.error("LLM Router: Cả Groq và Gemini đều báo lỗi! (%s)", eval_gemini_error)
-                    yield "\n\n*(Lỗi: Hệ thống đang bị quá tải giới hạn dữ liệu hoặc lỗi kết nối. Vui lòng hỏi lại với câu nắn nót hơn hoặc xóa bớt file nhé!)*"
+            except Exception as err:
+                logger.error("LLM Router: Cả Gemini và Groq đều lỗi! (%s)", err)
+                yield "\n\n*(Lỗi: Hệ thống đang bị quá tải giới hạn dữ liệu. Vui lòng thử lại sau!)*"
 
 
 # Backward compatibility alias 

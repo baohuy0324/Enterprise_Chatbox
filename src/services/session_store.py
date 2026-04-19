@@ -34,4 +34,12 @@ async def load_vectorstore_payload(
 
 
 async def delete_session(client: redis_async.Redis, session_id: str) -> bool:
+    await client.delete(f"pdf_rag:history:{session_id}")
     return bool(await client.delete(session_key(session_id)))
+
+async def save_history(client: redis_async.Redis, session_id: str, history: str, ttl_seconds: int) -> None:
+    await client.setex(f"pdf_rag:history:{session_id}", ttl_seconds, history)
+
+async def load_history(client: redis_async.Redis, session_id: str) -> str | None:
+    raw = await client.get(f"pdf_rag:history:{session_id}")
+    return raw.decode("utf-8") if raw else None
