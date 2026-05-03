@@ -1,6 +1,8 @@
 import os
+import time
+import logging
 import tempfile
-from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
+from langchain_community.document_loaders import PyMuPDFLoader, Docx2txtLoader
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
 import pandas as pd
@@ -12,17 +14,25 @@ from functools import lru_cache
 
 import torch
 
+logger = logging.getLogger(__name__)
+
 @lru_cache(maxsize=1)
 def get_embeddings():
     #Tạo Embeddings: Sử dụng HuggingFaceEmbeddings để không tải lại nhiều lần
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    logger.info(f"Khởi tạo embedding model trên device='{device}'")
     return HuggingFaceEmbeddings(
         model_name="all-MiniLM-L6-v2",
-        model_kwargs={'device': device}
+        model_kwargs={'device': device},
+        encode_kwargs={
+            'batch_size': 256,
+            'normalize_embeddings': True
+        }
     )
 
 def process_pdfs_to_vectorstore(pdf_files):
     #Chunking văn bản và tạo Vector database sử dụng FAISS.
+    t_start = time.time()
     documents = []
     
     # Helper extract OCR cho hình ảnh dùng Gemini Vision
@@ -50,7 +60,7 @@ def process_pdfs_to_vectorstore(pdf_files):
         try:
             # Route dựa trên đuôi file
             if ext == "pdf":
-                loader = PyPDFLoader(temp_path)
+                loader = PyMuPDFLoader(temp_path)
                 docs = loader.load()
             elif ext == "docx":
                 loader = Docx2txtLoader(temp_path)
@@ -78,17 +88,27 @@ def process_pdfs_to_vectorstore(pdf_files):
         
     if not documents:
         return None
+    
+    t_extract = time.time()
+    logger.info(f"[Ingest] Trích xuất văn bản xong: {len(documents)} documents, mất {t_extract - t_start:.1f}s")
         
     # Chunking
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000, # Giảm chunk size để chia nhỏ văn bản hơn, dễ lọc
+        chunk_size=1500, # Tăng chunk size để giảm tổng chunks, tối ưu tốc độ embed
         chunk_overlap=200, 
         separators=["\n\n", "\n", ".", "?", "!", " ", ""]  
     )
     chunks = text_splitter.split_documents(documents)
     
+    t_chunk = time.time()
+    logger.info(f"[Ingest] Chunking xong: {len(chunks)} chunks, mất {t_chunk - t_extract:.1f}s")
+    
     # Khởi tạo vector store bằng FAISS
     vectorstore = FAISS.from_documents(chunks, get_embeddings())
+    
+    t_embed = time.time()
+    logger.info(f"[Ingest] Embedding + FAISS xong: mất {t_embed - t_chunk:.1f}s")
+    logger.info(f"[Ingest] TỔNG THỜI GIAN INGEST: {t_embed - t_start:.1f}s")
     return vectorstore
 
 def get_context(vectorstore, query: str, target_files: list[str] = None) -> str:
@@ -98,13 +118,13 @@ def get_context(vectorstore, query: str, target_files: list[str] = None) -> str:
     if target_files:
         docs = vectorstore.max_marginal_relevance_search(
             query, 
-            k=8, 
+            k=10, 
             fetch_k=40, 
-            lambda_mult=0.1, 
+            lambda_mult=0.3, 
             filter=lambda md: md.get("source") in target_files
         )
     else:
-        docs = vectorstore.max_marginal_relevance_search(query, k=8, fetch_k=40, lambda_mult=0.1)
+        docs = vectorstore.max_marginal_relevance_search(query, k=10, fetch_k=40, lambda_mult=0.3)
     
     # Gom nhóm theo nguồn để AI không bị loạn khi đọc nhiều file
     grouped_context = {}

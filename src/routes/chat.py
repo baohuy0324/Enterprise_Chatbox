@@ -20,7 +20,7 @@ from src.core.cache import get_vectorstore
 from src.core.security import is_safe_query
 from src.schemas.chat import ERROR_RESPONSES, ChatRequest
 from src.services import session_store
-from src.services.intent_classifier import classify_intent
+from src.services.intent_classifier import classify_intent_with_fallback
 from src.services.llm import ask_enterprise_llm, ask_general_inquiry, ask_out_of_scope
 from src.services.rag import get_context
 from src.services.vectorstore_cache import history_to_string
@@ -47,7 +47,7 @@ async def chat_stream(body: ChatRequest, request: Request):
     chat_history = history_to_string(body.history)
 
     # 2. Intent Classification (CPU-light LLM call, chạy trong thread) 
-    intent = await asyncio.to_thread(classify_intent, body.message, chat_history)
+    intent = await asyncio.to_thread(classify_intent_with_fallback, body.message, chat_history)
     logger.info("chat_stream: intent=%s | msg='%s'", intent, body.message[:60])
 
     # 3. Branch theo intent 
@@ -66,7 +66,7 @@ async def chat_stream(body: ChatRequest, request: Request):
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    # 3b. Out-of-scope : từ chối lịch sự 
+    # 3b. Out-of-scope : từ chối lịch sự
     if intent == "out_of_scope":
         def _oos_sse():
             for chunk in ask_out_of_scope(body.message):

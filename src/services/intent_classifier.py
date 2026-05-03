@@ -72,6 +72,36 @@ def classify_intent(query: str, chat_history: str = "") -> IntentLiteral:
     except Exception as e:
         logger.error("IntentClassifier [Gemini] lỗi (%s), fallback → %s", type(e).__name__, _FALLBACK_INTENT)
 
-    # 3. Fallback mặc định
     return _FALLBACK_INTENT
+
+def _is_likely_followup(query: str, chat_history: str) -> bool:
+    """
+    Heuristic: phát hiện câu hỏi ngắn có khả năng là follow-up về tài liệu.
+    Nếu chat history có nội dung enterprise và câu hỏi rất ngắn → có thể là follow-up.
+    """
+    if not chat_history or not chat_history.strip():
+        return False
+        
+    word_count = len(query.strip().split())
+    if word_count > 10:
+        return False
+        
+    # Cấm ép kiểu follow-up nếu người dùng nhắc trực tiếp đến code/lập trình
+    query_lower = query.lower()
+    if any(kw in query_lower for kw in ["code", "lập trình", "viết", "python", "java", "c++", "toán", "khoa học"]):
+        return False
+        
+    enterprise_signals = ["tài liệu", "file", "trang", "nội dung", "tóm tắt", "document", "corpus", "Trợ lý AI"]
+    has_enterprise_context = any(signal.lower() in chat_history.lower() for signal in enterprise_signals)
+    return has_enterprise_context
+
+def classify_intent_with_fallback(query: str, chat_history: str = "") -> IntentLiteral:
+    intent = classify_intent(query, chat_history)
+    
+    # Safety net: câu hỏi ngắn + chat history có enterprise context → override out_of_scope
+    if intent == "out_of_scope" and _is_likely_followup(query, chat_history):
+        logger.info("IntentClassifier: Override out_of_scope → enterprise (follow-up ngắn detected: '%s')", query[:60])
+        intent = "enterprise"
+        
+    return intent
 
